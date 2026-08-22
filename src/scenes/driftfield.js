@@ -6,11 +6,11 @@ export const meta = {
   title: 'Driftfield',
   tags: ['gpgpu', 'ping-pong fbo', 'curl noise'],
   blurb:
-    'A quarter-million particles whose positions live entirely in a floating-point ' +
+    'Up to a million particles whose positions live entirely in a floating-point ' +
     'texture. Each frame a fragment shader advects every one of them through a ' +
     'divergence-free curl-noise field and writes the result to a second texture, ' +
     'which becomes next frame’s input. The CPU never touches a particle.',
-  stats: { particles: '262,144', 'sim passes/frame': '1', 'CPU work': 'none' },
+  stats: { 'sim passes/frame': '1', 'CPU work': 'none', 'CPU per particle': 'zero' },
   params: {
     // `structural` means changing it rebuilds GPU resources rather than setting
     // a uniform, so the UI applies it on release instead of mid-drag.

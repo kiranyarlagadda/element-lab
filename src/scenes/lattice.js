@@ -10,7 +10,7 @@ export const meta = {
     'all come out of one fbm field evaluated in the vertex shader, with a travelling swell that ' +
     'follows the pointer. This is the one that actually belongs behind a hero headline. It ' +
     'stays legible under text and costs a single draw call.',
-  stats: { instances: '18,000', 'draw calls': '1', 'CPU per frame': '3 uniforms' },
+  stats: { 'draw calls': '1', 'CPU per frame': '3 uniforms' },
   params: {
     amp: { label: 'Swell height', type: 'range', min: 0.1, max: 4.0, step: 0.05, value: 1.5 },
     size: { label: 'Dot size', type: 'range', min: 0.04, max: 0.32, step: 0.005, value: 0.135 },

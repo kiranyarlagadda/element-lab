@@ -10,7 +10,7 @@ export const meta = {
     'lighting: displacing vertices invalidates the mesh normals, so this resamples the displacement ' +
     'at two tangent-space neighbours and rebuilds the normal per vertex. Skip that and the whole ' +
     'thing shades like a smooth ball wearing a lumpy costume.',
-  stats: { vertices: '194,940', 'noise taps/vertex': '21', normals: 'recomputed' },
+  stats: { 'noise taps/vertex': '21', normals: 'recomputed per vertex' },
   params: {
     amp: { label: 'Displacement', type: 'range', min: 0.02, max: 0.6, step: 0.01, value: 0.28 },
     freq: { label: 'Noise frequency', type: 'range', min: 0.4, max: 4.0, step: 0.05, value: 1.5 },
