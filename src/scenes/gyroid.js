@@ -14,6 +14,10 @@ export const meta = {
     thickness: { label: 'Wall thickness', type: 'range', min: 0.08, max: 0.6, step: 0.01, value: 0.28 },
     scale: { label: 'Lattice scale', type: 'range', min: 1.5, max: 6.0, step: 0.05, value: 3.0 },
     speed: { label: 'Rotation', type: 'range', min: 0, max: 0.5, step: 0.01, value: 0.12 },
+    detail: { label: 'Fine detail', type: 'range', min: 0, max: 0.35, step: 0.005, value: 0.12 },
+    steps: { label: 'Ray steps', type: 'range', min: 24, max: 160, step: 1, value: 96 },
+    hue: { label: 'Hue', type: 'range', min: 0, max: 1, step: 0.005, value: 0 },
+    glow: { label: 'Rim light', type: 'range', min: 0, max: 2, step: 0.01, value: 0.75 },
   },
 };
 
@@ -34,6 +38,10 @@ const frag = /* glsl */ `
   uniform float uThickness;
   uniform float uScale;
   uniform float uSpeed;
+  uniform float uDetail;
+  uniform float uSteps;
+  uniform float uHue;
+  uniform float uGlow;
 
   varying vec2 vUv;
 
@@ -61,7 +69,7 @@ const frag = /* glsl */ `
     float coarse = gyroid(p, uScale, uThickness);
     float fine   = gyroid(p, uScale * 3.23, uThickness * 0.71);
 
-    float surface = coarse - fine * 0.12;
+    float surface = coarse - fine * uDetail;
 
     return max(shell, surface * 0.55);
   }
@@ -117,7 +125,8 @@ const frag = /* glsl */ `
     float dist = 0.0;
     bool hit = false;
 
-    for (int i = 0; i < 96; i++){
+    for (int i = 0; i < 160; i++){
+      if (float(i) >= uSteps) break;
       vec3 p = ro + rd * t;
       dist = map(p);
       if (dist < 0.0008 * t){ hit = true; break; }
@@ -147,7 +156,7 @@ const frag = /* glsl */ `
         vec3(0.42, 0.38, 0.50),
         vec3(0.40, 0.36, 0.42),
         vec3(1.00, 0.90, 0.75),
-        vec3(0.12, 0.30, 0.55)
+        vec3(0.12, 0.30, 0.55) + uHue
       );
 
       vec3 halfVec = normalize(keyDir + viewDir);
@@ -155,7 +164,7 @@ const frag = /* glsl */ `
 
       col  = base * (0.16 + 0.90 * key * shadow) * occ;
       col += vec3(1.0, 0.96, 0.92) * spec * shadow * 0.55;
-      col += vec3(0.35, 0.60, 1.00) * fresnel * 0.75;
+      col += vec3(0.35, 0.60, 1.00) * fresnel * uGlow;
 
       // Distance haze keeps the far side of the lattice from reading as noise.
       col = mix(col, vec3(0.02, 0.03, 0.06), smoothstep(3.4, 7.2, t));
@@ -189,6 +198,10 @@ export function create({ renderer, width, height, params = {} }) {
       uThickness: { value: params.thickness ?? 0.28 },
       uScale: { value: params.scale ?? 3.0 },
       uSpeed: { value: params.speed ?? 0.12 },
+      uDetail: { value: params.detail ?? 0.12 },
+      uSteps: { value: params.steps ?? 96 },
+      uHue: { value: params.hue ?? 0 },
+      uGlow: { value: params.glow ?? 0.75 },
     },
   });
 
@@ -222,6 +235,10 @@ export function create({ renderer, width, height, params = {} }) {
     if (next.thickness !== undefined) material.uniforms.uThickness.value = next.thickness;
     if (next.scale !== undefined) material.uniforms.uScale.value = next.scale;
     if (next.speed !== undefined) material.uniforms.uSpeed.value = next.speed;
+    if (next.detail !== undefined) material.uniforms.uDetail.value = next.detail;
+    if (next.steps !== undefined) material.uniforms.uSteps.value = next.steps;
+    if (next.hue !== undefined) material.uniforms.uHue.value = next.hue;
+    if (next.glow !== undefined) material.uniforms.uGlow.value = next.glow;
   }
 
   return { render, resize, dispose, setParams, background };

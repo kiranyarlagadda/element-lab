@@ -15,6 +15,20 @@ export const meta = {
     amp: { label: 'Displacement', type: 'range', min: 0.02, max: 0.6, step: 0.01, value: 0.28 },
     freq: { label: 'Noise frequency', type: 'range', min: 0.4, max: 4.0, step: 0.05, value: 1.5 },
     speed: { label: 'Rotation', type: 'range', min: 0, max: 0.6, step: 0.01, value: 0.15 },
+    detail: {
+      label: 'Mesh detail',
+      type: 'select',
+      structural: true,
+      value: 56,
+      options: [
+        { label: '3,840 verts', value: 7 },
+        { label: '21,780 verts', value: 32 },
+        { label: '194,940 verts', value: 56 },
+        { label: '253,500 verts', value: 64 },
+      ],
+    },
+    hue: { label: 'Hue', type: 'range', min: 0, max: 1, step: 0.005, value: 0 },
+    shine: { label: 'Reflectivity', type: 'range', min: 0, max: 1.6, step: 0.01, value: 0.85 },
   },
 };
 
@@ -77,6 +91,8 @@ const frag = /* glsl */ `
 
   uniform vec3  uCameraPos;
   uniform float uTime;
+  uniform float uHue;
+  uniform float uShine;
 
   varying vec3 vNormal;
   varying vec3 vWorldPos;
@@ -113,7 +129,7 @@ const frag = /* glsl */ `
       vec3(0.56, 0.54, 0.62),
       vec3(0.26, 0.24, 0.30),
       vec3(1.00, 1.00, 1.00),
-      vec3(0.02, 0.16, 0.32)
+      vec3(0.02, 0.16, 0.32) + uHue
     );
 
     vec3 keyDir = normalize(vec3(0.6, 0.8, 0.45));
@@ -124,7 +140,7 @@ const frag = /* glsl */ `
     vec3 env = environment(reflectDir);
 
     vec3 col = iridescence * (0.20 + 0.75 * diffuse);
-    col = mix(col, env * iridescence * 1.4, fresnel * 0.85);
+    col = mix(col, env * iridescence * 1.4, fresnel * uShine);
     col += vec3(1.0) * spec * 0.6;
 
     // Crevices go darker; ridges catch a little extra light.
@@ -145,7 +161,8 @@ export function create({ renderer, width, height, params = {} }) {
   // 194,940 vertices. Detail is deliberately high: displacement happens per
   // vertex, so mesh density is what decides whether ridges read as smooth
   // curves or as visible facets along the silhouette.
-  const geometry = new THREE.IcosahedronGeometry(1, 56);
+  let detail = Number(params.detail) || 56;
+  let geometry = new THREE.IcosahedronGeometry(1, detail);
 
   const material = new THREE.ShaderMaterial({
     vertexShader: vert,
@@ -156,11 +173,22 @@ export function create({ renderer, width, height, params = {} }) {
       uFreq: { value: params.freq ?? 1.5 },
       uRadius: { value: 1.0 },
       uCameraPos: { value: new THREE.Vector3() },
+      uHue: { value: params.hue ?? 0 },
+      uShine: { value: params.shine ?? 0.85 },
     },
   });
 
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
+
+  /** Subdivision level is baked into the buffer, so changing it rebuilds. */
+  function rebuild(next) {
+    detail = next;
+    const old = mesh.geometry;
+    mesh.geometry = new THREE.IcosahedronGeometry(1, detail);
+    geometry = mesh.geometry;
+    old.dispose();
+  }
 
   const tilt = new THREE.Vector2(0, 0);
   let spin = params.speed ?? 0.15;
@@ -190,7 +218,7 @@ export function create({ renderer, width, height, params = {} }) {
   }
 
   function dispose() {
-    geometry.dispose();
+    mesh.geometry.dispose();
     material.dispose();
   }
 
@@ -198,6 +226,11 @@ export function create({ renderer, width, height, params = {} }) {
     if (next.amp !== undefined) material.uniforms.uAmp.value = next.amp;
     if (next.freq !== undefined) material.uniforms.uFreq.value = next.freq;
     if (next.speed !== undefined) spin = next.speed;
+    if (next.hue !== undefined) material.uniforms.uHue.value = next.hue;
+    if (next.shine !== undefined) material.uniforms.uShine.value = next.shine;
+
+    const wanted = Number(next.detail);
+    if (Number.isFinite(wanted) && wanted !== detail) rebuild(wanted);
   }
 
   return { render, resize, dispose, setParams, background };

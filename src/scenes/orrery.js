@@ -12,8 +12,7 @@ const DAYS_PER_SECOND = 45;
 // collapse into the Sun's glare. Taking the square root of the radius keeps the
 // ordering, the eccentric offsets and the orbit shapes readable while fitting
 // Neptune on screen. Angles and orbital periods are untouched.
-const AU_SCALE = 1.6;
-const compress = (r) => Math.sqrt(r) * AU_SCALE;
+const compress = (r, auScale) => Math.sqrt(r) * auScale;
 
 const EPOCH = new Date();
 
@@ -36,6 +35,9 @@ export const meta = {
     speed: { label: 'Days per second', type: 'range', min: 0, max: 400, step: 1, value: 45 },
     size: { label: 'Body size', type: 'range', min: 40, max: 320, step: 1, value: 130 },
     zoom: { label: 'Camera distance', type: 'range', min: 9, max: 30, step: 0.1, value: 16 },
+    elevation: { label: 'Camera height', type: 'range', min: 0.5, max: 16, step: 0.1, value: 6.8 },
+    orbits: { label: 'Orbit lines', type: 'range', min: 0, max: 1, step: 0.01, value: 0.7 },
+    spread: { label: 'Distance spread', type: 'range', min: 1.0, max: 2.6, step: 0.02, value: 1.6 },
   },
 };
 
@@ -90,32 +92,37 @@ export function create({ renderer, width, height, params = {} }) {
   const camera = new PerspectiveCamera(45, width / height, 0.1, 400);
 
   const T0 = julianCenturies(EPOCH);
+  let auScale = params.spread ?? 1.6;
+  let cameraHeight = params.elevation ?? 6.8;
 
   // ---- orbit paths: every planet merged into one LineSegments -------------
-  const segments = [];
-  const segmentColours = [];
-  for (const planet of PLANETS) {
-    const path = orbitPath(planet, T0, 320);
-    const c = new Color(planet.colour);
-    for (let i = 0; i < path.length; i++) {
-      const a = path[i];
-      const b = path[(i + 1) % path.length];
-      for (const p of [a, b]) {
-        const r = Math.hypot(p.x, p.y, p.z);
-        const k = compress(r) / r;
-        segments.push(p.x * k, p.y * k, p.z * k);
-        // Fade the far half of each orbit so the ellipse reads as 3D.
-        segmentColours.push(c.r * 0.8, c.g * 0.8, c.b * 0.8);
+  const orbitGeometry = new BufferGeometry();
+
+  /** Orbit vertices bake in the radial compression, so spread changes rebuild. */
+  function buildOrbits() {
+    const segments = [];
+    const segmentColours = [];
+    for (const planet of PLANETS) {
+      const path = orbitPath(planet, T0, 320);
+      const c = new Color(planet.colour);
+      for (let i = 0; i < path.length; i++) {
+        for (const p of [path[i], path[(i + 1) % path.length]]) {
+          const r = Math.hypot(p.x, p.y, p.z);
+          const k = compress(r, auScale) / r;
+          segments.push(p.x * k, p.y * k, p.z * k);
+          segmentColours.push(c.r * 0.8, c.g * 0.8, c.b * 0.8);
+        }
       }
     }
+    orbitGeometry.setAttribute('position', new BufferAttribute(new Float32Array(segments), 3));
+    orbitGeometry.setAttribute('color', new BufferAttribute(new Float32Array(segmentColours), 3));
   }
-  const orbitGeometry = new BufferGeometry();
-  orbitGeometry.setAttribute('position', new BufferAttribute(new Float32Array(segments), 3));
-  orbitGeometry.setAttribute('color', new BufferAttribute(new Float32Array(segmentColours), 3));
+
+  buildOrbits();
   const orbitMaterial = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.7,
+    opacity: params.orbits ?? 0.7,
     blending: AdditiveBlending,
     depthWrite: false,
   });
@@ -186,7 +193,7 @@ export function create({ renderer, width, height, params = {} }) {
 
     PLANETS.forEach((planet, i) => {
       const p = heliocentric(planet, T);
-      const k = compress(p.r) / p.r;
+      const k = compress(p.r, auScale) / p.r;
       planetPositions[i * 3 + 0] = p.x * k;
       planetPositions[i * 3 + 1] = p.y * k;
       planetPositions[i * 3 + 2] = p.z * k;
@@ -201,7 +208,7 @@ export function create({ renderer, width, height, params = {} }) {
 
     // Slow drift around the ecliptic; the pointer raises and lowers the view.
     const angle = time * 0.045 + tilt.x * 0.7;
-    const elevation = 6.8 + tilt.y * 4.5;
+    const elevation = cameraHeight + tilt.y * 4.5;
     const radius = orbitRadius;
     camera.position.set(Math.sin(angle) * radius, Math.cos(angle) * radius, elevation);
     camera.up.set(0, 0, 1);              // z is ecliptic north here
@@ -236,6 +243,14 @@ export function create({ renderer, width, height, params = {} }) {
     if (next.size !== undefined) {
       planetMaterial.uniforms.uBodyScale.value = next.size;
       sunMaterial.uniforms.uBodyScale.value = next.size;
+    }
+    if (next.elevation !== undefined) cameraHeight = next.elevation;
+    if (next.orbits !== undefined) orbitMaterial.opacity = next.orbits;
+
+    const wanted = Number(next.spread);
+    if (Number.isFinite(wanted) && wanted !== auScale) {
+      auScale = wanted;
+      buildOrbits();
     }
   }
 

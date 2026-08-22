@@ -15,12 +15,24 @@ export const meta = {
     amp: { label: 'Swell height', type: 'range', min: 0.1, max: 4.0, step: 0.05, value: 1.5 },
     size: { label: 'Dot size', type: 'range', min: 0.04, max: 0.32, step: 0.005, value: 0.135 },
     speed: { label: 'Drift speed', type: 'range', min: 0, max: 0.6, step: 0.01, value: 0.16 },
+    density: {
+      label: 'Grid density',
+      type: 'select',
+      structural: true,
+      value: 180,
+      options: [
+        { label: '4,500 dots', value: 90 },
+        { label: '18,000 dots', value: 180 },
+        { label: '40,500 dots', value: 270 },
+        { label: '72,000 dots', value: 360 },
+      ],
+    },
+    spacing: { label: 'Spacing', type: 'range', min: 0.12, max: 0.5, step: 0.005, value: 0.26 },
+    hue: { label: 'Hue', type: 'range', min: 0, max: 1, step: 0.005, value: 0 },
   },
 };
 
-const COLS = 180;
-const ROWS = 100;
-const COUNT = COLS * ROWS;
+
 
 const vert = /* glsl */ `
   precision highp float;
@@ -74,6 +86,7 @@ const frag = /* glsl */ `
   precision highp float;
 
   uniform float uTime;
+  uniform float uHue;
 
   varying float vHeight;
   varying float vRand;
@@ -94,7 +107,7 @@ const frag = /* glsl */ `
       vec3(0.28, 0.30, 0.40),
       vec3(0.32, 0.34, 0.40),
       vec3(0.90, 0.85, 0.80),
-      vec3(0.10, 0.28, 0.52)
+      vec3(0.10, 0.28, 0.52) + uHue
     );
 
     // Crests pick up a cool highlight, troughs sink toward the background.
@@ -111,28 +124,35 @@ export function create({ renderer, width, height, params = {} }) {
   camera.position.set(0, -14, 13);
   camera.lookAt(0, 1.5, 0);
 
+  let cols = Number(params.density) || 180;
+  let rows = Math.round(cols * 100 / 180);
+  let spacing = params.spacing ?? 0.26;
+
   const base = new THREE.PlaneGeometry(1, 1);
-  const geometry = new THREE.InstancedBufferGeometry();
-  geometry.index = base.index;
-  geometry.attributes.position = base.attributes.position;
-  geometry.attributes.uv = base.attributes.uv;
-  geometry.instanceCount = COUNT;
+  let geometry = new THREE.InstancedBufferGeometry();
 
-  const offsets = new Float32Array(COUNT * 2);
-  const rands = new Float32Array(COUNT);
-  const spacing = 0.26;
-
-  for (let i = 0; i < COUNT; i++) {
-    const col = i % COLS;
-    const row = Math.floor(i / COLS);
-    offsets[i * 2 + 0] = (col - COLS / 2) * spacing;
-    offsets[i * 2 + 1] = (row - ROWS / 2) * spacing;
-    rands[i] = Math.random();
+  /** Instance buffers are sized by the grid, so density changes rebuild them. */
+  function fillInstances(target) {
+    const count = cols * rows;
+    const offsets = new Float32Array(count * 2);
+    const rands = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      offsets[i * 2 + 0] = (col - cols / 2) * spacing;
+      offsets[i * 2 + 1] = (row - rows / 2) * spacing;
+      rands[i] = Math.random();
+    }
+    target.index = base.index;
+    target.attributes.position = base.attributes.position;
+    target.attributes.uv = base.attributes.uv;
+    target.instanceCount = count;
+    target.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 2));
+    target.setAttribute('aRand', new THREE.InstancedBufferAttribute(rands, 1));
+    target.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 200);
   }
 
-  geometry.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 2));
-  geometry.setAttribute('aRand', new THREE.InstancedBufferAttribute(rands, 1));
-  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 60);
+  fillInstances(geometry);
 
   const material = new THREE.ShaderMaterial({
     vertexShader: vert,
@@ -147,6 +167,7 @@ export function create({ renderer, width, height, params = {} }) {
       uAmp: { value: params.amp ?? 1.5 },
       uDotSize: { value: params.size ?? 0.135 },
       uDrift: { value: params.speed ?? 0.16 },
+      uHue: { value: params.hue ?? 0 },
     },
   });
 
@@ -191,7 +212,7 @@ export function create({ renderer, width, height, params = {} }) {
 
   function dispose() {
     base.dispose();
-    geometry.dispose();
+    mesh.geometry.dispose();
     material.dispose();
   }
 
@@ -199,6 +220,23 @@ export function create({ renderer, width, height, params = {} }) {
     if (next.amp !== undefined) material.uniforms.uAmp.value = next.amp;
     if (next.size !== undefined) material.uniforms.uDotSize.value = next.size;
     if (next.speed !== undefined) material.uniforms.uDrift.value = next.speed;
+    if (next.hue !== undefined) material.uniforms.uHue.value = next.hue;
+
+    const wantedCols = Number(next.density);
+    const wantedSpacing = next.spacing === undefined ? spacing : Number(next.spacing);
+    const gridChanged = Number.isFinite(wantedCols) && wantedCols !== cols;
+    const spacingChanged = Number.isFinite(wantedSpacing) && wantedSpacing !== spacing;
+
+    if (gridChanged || spacingChanged) {
+      if (gridChanged) { cols = wantedCols; rows = Math.round(cols * 100 / 180); }
+      if (spacingChanged) spacing = wantedSpacing;
+      const old = mesh.geometry;
+      const rebuilt = new THREE.InstancedBufferGeometry();
+      fillInstances(rebuilt);
+      mesh.geometry = rebuilt;
+      geometry = rebuilt;
+      old.dispose();
+    }
   }
 
   return { render, resize, dispose, setParams, background };

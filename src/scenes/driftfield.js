@@ -6,21 +6,35 @@ export const meta = {
   title: 'Driftfield',
   tags: ['gpgpu', 'ping-pong fbo', 'curl noise'],
   blurb:
-    'A quarter-million particles whose positions live entirely in a floating-point texture. ' +
-    'Each frame a fragment shader advects every one of them through a divergence-free curl-noise ' +
-    'field and writes the result to a second texture, which becomes next frame’s input. ' +
-    'The CPU never touches a particle.',
+    'A quarter-million particles whose positions live entirely in a floating-point ' +
+    'texture. Each frame a fragment shader advects every one of them through a ' +
+    'divergence-free curl-noise field and writes the result to a second texture, ' +
+    'which becomes next frame’s input. The CPU never touches a particle.',
   stats: { particles: '262,144', 'sim passes/frame': '1', 'CPU work': 'none' },
   params: {
+    // `structural` means changing it rebuilds GPU resources rather than setting
+    // a uniform, so the UI applies it on release instead of mid-drag.
+    count: {
+      label: 'Particles',
+      type: 'select',
+      structural: true,
+      value: 512,
+      options: [
+        { label: '16,384', value: 128 },
+        { label: '65,536', value: 256 },
+        { label: '262,144', value: 512 },
+        { label: '1,048,576', value: 1024 },
+      ],
+    },
     speed: { label: 'Flow speed', type: 'range', min: 0.05, max: 1.4, step: 0.01, value: 0.48 },
     scale: { label: 'Noise scale', type: 'range', min: 0.4, max: 4.0, step: 0.01, value: 1.75 },
     size: { label: 'Particle size', type: 'range', min: 2, max: 11, step: 0.1, value: 5.5 },
     decay: { label: 'Lifetime', type: 'range', min: 0.03, max: 0.6, step: 0.01, value: 0.14 },
+    force: { label: 'Pointer push', type: 'range', min: 0, max: 1.6, step: 0.01, value: 0.55 },
+    hue: { label: 'Hue', type: 'range', min: 0, max: 1, step: 0.005, value: 0 },
+    exposure: { label: 'Brightness', type: 'range', min: 0.15, max: 1.6, step: 0.01, value: 0.55 },
   },
 };
-
-const SIZE = 512;                 // 512 x 512 texels -> 262,144 particles
-const COUNT = SIZE * SIZE;
 
 const simFrag = /* glsl */ `
   precision highp float;
@@ -118,6 +132,7 @@ const pointsFrag = /* glsl */ `
   precision highp float;
 
   uniform float uExposure;
+  uniform float uHue;
   varying float vSpeed;
   varying float vLife;
 
@@ -129,7 +144,7 @@ const pointsFrag = /* glsl */ `
     if (r2 > 0.25) discard;
 
     // Soft round sprite, no texture needed.
-    float sprite = (1.0 - smoothstep(0.0, 0.25, r2));
+    float sprite = 1.0 - smoothstep(0.0, 0.25, r2);
 
     // Fade in on spawn, out on death, so respawns never pop.
     float fade = (1.0 - smoothstep(0.82, 1.0, vLife)) * smoothstep(0.0, 0.18, vLife);
@@ -140,7 +155,7 @@ const pointsFrag = /* glsl */ `
       vec3(0.34, 0.30, 0.44),
       vec3(0.42, 0.36, 0.44),
       vec3(1.00, 0.95, 0.85),
-      vec3(0.00, 0.18, 0.42)
+      vec3(0.00, 0.18, 0.42) + uHue
     );
     col += vec3(0.35, 0.55, 1.0) * pow(t, 3.0) * 0.8;
 
@@ -165,28 +180,7 @@ export function create({ renderer, width, height, params = {} }) {
     wrapT: THREE.ClampToEdgeWrapping,
   };
 
-  const targets = [
-    new THREE.WebGLRenderTarget(SIZE, SIZE, rtOptions),
-    new THREE.WebGLRenderTarget(SIZE, SIZE, rtOptions),
-  ];
-
-  // ---- seed data -----------------------------------------------------------
-  const seed = new Float32Array(COUNT * 4);
-  for (let i = 0; i < COUNT; i++) {
-    // Uniform point in a spherical shell.
-    const u = Math.random() * 2 - 1;
-    const theta = Math.random() * Math.PI * 2;
-    const s = Math.sqrt(1 - u * u);
-    const radius = 0.3 + Math.random() * 0.6;
-    seed[i * 4 + 0] = s * Math.cos(theta) * radius;
-    seed[i * 4 + 1] = s * Math.sin(theta) * radius;
-    seed[i * 4 + 2] = u * radius;
-    seed[i * 4 + 3] = Math.random(); // staggered life so deaths never sync up
-  }
-  const seedTex = new THREE.DataTexture(seed, SIZE, SIZE, THREE.RGBAFormat, THREE.FloatType);
-  seedTex.needsUpdate = true;
-
-  // ---- offscreen sim scene -------------------------------------------------
+  // ---- offscreen sim scene (built once, reused across rebuilds) -----------
   const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const simScene = new THREE.Scene();
   const quad = new THREE.PlaneGeometry(2, 2);
@@ -197,54 +191,28 @@ export function create({ renderer, width, height, params = {} }) {
     depthTest: false,
     depthWrite: false,
     uniforms: {
-      uPos: { value: seedTex },
+      uPos: { value: null },
       uTime: { value: 0 },
       uDt: { value: 0.016 },
       uScale: { value: params.scale ?? 1.75 },
       uSpeed: { value: params.speed ?? 0.48 },
       uDecay: { value: params.decay ?? 0.14 },
       uPointer: { value: new THREE.Vector3(999, 999, 999) },
-      uPointerForce: { value: 0.0 },
+      uPointerForce: { value: 0 },
     },
   });
-  const simMesh = new THREE.Mesh(quad, simMaterial);
-  simMesh.frustumCulled = false;
-  simScene.add(simMesh);
 
   const copyMaterial = new THREE.ShaderMaterial({
     vertexShader: passVert,
     fragmentShader: copyFrag,
     depthTest: false,
     depthWrite: false,
-    uniforms: { uPos: { value: seedTex } },
+    uniforms: { uPos: { value: null } },
   });
 
-  // Prime both targets with the seed so frame 0 has a valid previous frame.
-  const priorAutoClear = renderer.autoClear;
-  simMesh.material = copyMaterial;
-  for (const target of targets) {
-    renderer.setRenderTarget(target);
-    renderer.render(simScene, simCamera);
-  }
-  renderer.setRenderTarget(null);
-  renderer.autoClear = priorAutoClear;
-  simMesh.material = simMaterial;
-
-  // ---- display scene -------------------------------------------------------
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-  camera.position.set(0, 0, 3.1);
-
-  const refs = new Float32Array(COUNT * 2);
-  const positions = new Float32Array(COUNT * 3); // required by three, unused by the shader
-  for (let i = 0; i < COUNT; i++) {
-    refs[i * 2 + 0] = ((i % SIZE) + 0.5) / SIZE;
-    refs[i * 2 + 1] = (Math.floor(i / SIZE) + 0.5) / SIZE;
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('aRef', new THREE.BufferAttribute(refs, 2));
-  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
+  const simMesh = new THREE.Mesh(quad, simMaterial);
+  simMesh.frustumCulled = false;
+  simScene.add(simMesh);
 
   const pointsMaterial = new THREE.ShaderMaterial({
     vertexShader: pointsVert,
@@ -253,21 +221,99 @@ export function create({ renderer, width, height, params = {} }) {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     uniforms: {
-      uPos: { value: targets[0].texture },
-      uPrevPos: { value: targets[1].texture },
+      uPos: { value: null },
+      uPrevPos: { value: null },
       uSize: { value: params.size ?? 5.5 },
       uPixelRatio: { value: renderer.getPixelRatio() },
-      uExposure: { value: 0.55 },
+      uExposure: { value: params.exposure ?? 0.55 },
+      uHue: { value: params.hue ?? 0 },
     },
   });
 
-  const points = new THREE.Points(geometry, pointsMaterial);
-  points.frustumCulled = false;
-  scene.add(points);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
+  camera.position.set(0, 0, 3.1);
 
+  // ---- simulation resources, rebuilt when the particle count changes ------
+  let side = 0;
+  let targets = null;
+  let seedTex = null;
+  let geometry = null;
+  let points = null;
   let current = 0;
+
+  function releaseSim() {
+    if (points) scene.remove(points);
+    targets?.forEach((t) => t.dispose());
+    seedTex?.dispose();
+    geometry?.dispose();
+    targets = null;
+    seedTex = null;
+    geometry = null;
+    points = null;
+  }
+
+  /** (Re)build the FBO pair and point cloud for an n x n particle texture. */
+  function buildSim(n) {
+    releaseSim();
+    side = n;
+    const count = n * n;
+
+    targets = [
+      new THREE.WebGLRenderTarget(n, n, rtOptions),
+      new THREE.WebGLRenderTarget(n, n, rtOptions),
+    ];
+
+    const seed = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) {
+      // Uniform point in a spherical shell.
+      const u = Math.random() * 2 - 1;
+      const theta = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const radius = 0.3 + Math.random() * 0.6;
+      seed[i * 4 + 0] = s * Math.cos(theta) * radius;
+      seed[i * 4 + 1] = s * Math.sin(theta) * radius;
+      seed[i * 4 + 2] = u * radius;
+      seed[i * 4 + 3] = Math.random(); // staggered life so deaths never sync up
+    }
+    seedTex = new THREE.DataTexture(seed, n, n, THREE.RGBAFormat, THREE.FloatType);
+    seedTex.needsUpdate = true;
+
+    // Prime both targets with the seed so frame 0 has a valid previous frame.
+    copyMaterial.uniforms.uPos.value = seedTex;
+    simMesh.material = copyMaterial;
+    for (const target of targets) {
+      renderer.setRenderTarget(target);
+      renderer.render(simScene, simCamera);
+    }
+    renderer.setRenderTarget(null);
+    simMesh.material = simMaterial;
+
+    const refs = new Float32Array(count * 2);
+    const positions = new Float32Array(count * 3); // required by three, unused by the shader
+    for (let i = 0; i < count; i++) {
+      refs[i * 2 + 0] = ((i % n) + 0.5) / n;
+      refs[i * 2 + 1] = (Math.floor(i / n) + 0.5) / n;
+    }
+    geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aRef', new THREE.BufferAttribute(refs, 2));
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
+
+    points = new THREE.Points(geometry, pointsMaterial);
+    points.frustumCulled = false;
+    scene.add(points);
+
+    current = 0;
+    pointsMaterial.uniforms.uPos.value = targets[0].texture;
+    pointsMaterial.uniforms.uPrevPos.value = targets[1].texture;
+  }
+
+  buildSim(Number(params.count) || 512);
+
   const pointerWorld = new THREE.Vector3(999, 999, 999);
   const background = new THREE.Color(0x05060b);
+  let pointerForce = params.force ?? 0.55;
 
   function render(time, dt, pointer) {
     // Project the 2D pointer onto the z = 0 plane in world space.
@@ -279,7 +325,7 @@ export function create({ renderer, width, height, params = {} }) {
       simMaterial.uniforms.uPointer.value.copy(pointerWorld);
     }
     simMaterial.uniforms.uPointerForce.value +=
-      ((pointer.active ? 0.55 : 0.0) - simMaterial.uniforms.uPointerForce.value) * 0.06;
+      ((pointer.active ? pointerForce : 0) - simMaterial.uniforms.uPointerForce.value) * 0.06;
 
     simMaterial.uniforms.uTime.value = time;
     simMaterial.uniforms.uDt.value = dt;
@@ -304,6 +350,20 @@ export function create({ renderer, width, height, params = {} }) {
     renderer.render(scene, camera);
   }
 
+  function setParams(next) {
+    const u = simMaterial.uniforms;
+    if (next.scale !== undefined) u.uScale.value = next.scale;
+    if (next.speed !== undefined) u.uSpeed.value = next.speed;
+    if (next.decay !== undefined) u.uDecay.value = next.decay;
+    if (next.force !== undefined) pointerForce = next.force;
+    if (next.size !== undefined) pointsMaterial.uniforms.uSize.value = next.size;
+    if (next.hue !== undefined) pointsMaterial.uniforms.uHue.value = next.hue;
+    if (next.exposure !== undefined) pointsMaterial.uniforms.uExposure.value = next.exposure;
+
+    const wanted = Number(next.count);
+    if (Number.isFinite(wanted) && wanted !== side) buildSim(wanted);
+  }
+
   function resize(w, h) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -311,20 +371,11 @@ export function create({ renderer, width, height, params = {} }) {
   }
 
   function dispose() {
-    targets.forEach((t) => t.dispose());
-    seedTex.dispose();
+    releaseSim();
     quad.dispose();
-    geometry.dispose();
     simMaterial.dispose();
     copyMaterial.dispose();
     pointsMaterial.dispose();
-  }
-
-  function setParams(next) {
-    if (next.scale !== undefined) simMaterial.uniforms.uScale.value = next.scale;
-    if (next.speed !== undefined) simMaterial.uniforms.uSpeed.value = next.speed;
-    if (next.decay !== undefined) simMaterial.uniforms.uDecay.value = next.decay;
-    if (next.size !== undefined) pointsMaterial.uniforms.uSize.value = next.size;
   }
 
   return { render, resize, dispose, setParams, background };
