@@ -23,6 +23,39 @@ disposes its GPU resources when removed from the DOM.
 | `lattice` | 18,000 billboarded dots in a single instanced call. Designed to sit behind a headline and stay legible. |
 | `orrery` | The real solar system. Positions come from NASA/JPL Keplerian elements solved through Kepler's equation, so the planets are where they actually are today. |
 
+## Configuring a scene
+
+Every scene declares a set of parameters, and each one is an attribute:
+
+```html
+<lab-scene name="driftfield" speed="0.9" scale="2.4" size="7"></lab-scene>
+```
+
+Attributes are read when the scene loads and watched afterwards, so changing one
+at runtime updates the running scene in place. Nothing rebuilds.
+
+```js
+el.setAttribute('speed', '1.2');   // takes effect on the next frame
+```
+
+| Scene | Parameters |
+|---|---|
+| `driftfield` | `speed` `scale` `size` `decay` |
+| `gyroid` | `thickness` `scale` `speed` |
+| `chroma` | `amp` `freq` `speed` |
+| `lattice` | `amp` `size` `speed` |
+| `orrery` | `speed` `size` `zoom` |
+
+Read the schema at runtime to build your own controls:
+
+```js
+el.paramSchema;   // { speed: { label, type, min, max, step, value }, ... }
+el.params;        // current values, defaults merged with any attributes set
+```
+
+Anything you leave off falls back to the scene's default, so the bare tag always
+works.
+
 ## Install
 
 ```bash

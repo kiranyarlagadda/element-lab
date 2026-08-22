@@ -14,7 +14,7 @@ export const meta = {
   params: {
     speed: { label: 'Flow speed', type: 'range', min: 0.05, max: 1.4, step: 0.01, value: 0.48 },
     scale: { label: 'Noise scale', type: 'range', min: 0.4, max: 4.0, step: 0.01, value: 1.75 },
-    size: { label: 'Particle size', type: 'range', min: 1.5, max: 18, step: 0.1, value: 5.5 },
+    size: { label: 'Particle size', type: 'range', min: 2, max: 11, step: 0.1, value: 5.5 },
     decay: { label: 'Lifetime', type: 'range', min: 0.03, max: 0.6, step: 0.01, value: 0.14 },
   },
 };
