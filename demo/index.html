@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>element-lab — demo</title>
+    <style>
+      :root {
+        --ink: #eef1f8;
+        --ink-dim: #98a1b6;
+        --bg: #05060b;
+        --line: rgba(255, 255, 255, 0.12);
+        --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 2.5rem 1.5rem 4rem;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        line-height: 1.6;
+      }
+      main { max-width: 54rem; margin: 0 auto; display: flex; flex-direction: column; gap: 2.5rem; }
+      h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
+      .lede { margin: 0; color: var(--ink-dim); max-width: 46ch; }
+      pre {
+        margin: 0;
+        padding: 0.9rem 1.1rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        overflow-x: auto;
+      }
+      figure { margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+      figcaption { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-dim); }
+      lab-scene {
+        display: block;
+        height: 22rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      /* The element sets this itself when there is no WebGL context. */
+      lab-scene[data-state='unsupported'] {
+        background: repeating-linear-gradient(45deg, #14121d, #14121d 10px, #191725 10px, #191725 20px);
+      }
+      lab-scene[data-state='unsupported']::after {
+        content: 'WebGL unavailable';
+        display: grid;
+        place-items: center;
+        height: 100%;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--ink-dim);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>element-lab</h1>
+        <p class="lede">
+          Every scene below is one tag. They load lazily, render only while on
+          screen, and dispose themselves when removed.
+        </p>
+      </header>
+
+      <pre>&lt;script type="module"&gt;import 'element-lab'&lt;/script&gt;
+&lt;lab-scene name="driftfield"&gt;&lt;/lab-scene&gt;</pre>
+
+      <figure>
+        <lab-scene name="driftfield"></lab-scene>
+        <figcaption>driftfield — 262,144 particles simulated on the GPU</figcaption>
+      </figure>
+
+      <figure>
+        <lab-scene name="gyroid"></lab-scene>
+        <figcaption>gyroid — raymarched SDF, two triangles, no geometry</figcaption>
+      </figure>
+
+      <figure>
+        <lab-scene name="chroma"></lab-scene>
+        <figcaption>chroma — vertex displacement with rebuilt normals</figcaption>
+      </figure>
+
+      <figure>
+        <lab-scene name="lattice"></lab-scene>
+        <figcaption>lattice — 18,000 instances, one draw call</figcaption>
+      </figure>
+
+      <figure>
+        <lab-scene name="orrery"></lab-scene>
+        <figcaption>orrery — real planet positions from NASA/JPL elements</figcaption>
+      </figure>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

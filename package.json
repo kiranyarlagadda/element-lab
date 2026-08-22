@@ -1,0 +1,47 @@
+{
+  "name": "element-lab",
+  "version": "0.1.0",
+  "description": "Hand-written WebGL scenes as a drop-in custom element: <lab-scene name=\"driftfield\">",
+  "type": "module",
+  "license": "MIT",
+  "author": "Kiran Yarlagadda",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiranyarlagadda/element-lab.git"
+  },
+  "keywords": [
+    "webgl",
+    "threejs",
+    "glsl",
+    "shaders",
+    "web-components",
+    "custom-elements"
+  ],
+  "exports": {
+    ".": "./src/index.js",
+    "./scenes/*": "./src/scenes/*.js",
+    "./lib/*": "./src/lib/*.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "./src/index.js",
+    "./src/lab-scene.js"
+  ],
+  "scripts": {
+    "check": "node scripts/check-glsl.mjs",
+    "dev": "vite --port 5180",
+    "build": "node scripts/check-glsl.mjs && vite build",
+    "build:single": "vite build --config vite.config.standalone.mjs && node scripts/build-standalone.mjs"
+  },
+  "peerDependencies": {
+    "three": ">=0.180.0"
+  },
+  "devDependencies": {
+    "three": "^0.185.1",
+    "vite": "^7.3.1"
+  }
+}
