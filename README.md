@@ -8,8 +8,8 @@ Hand-written WebGL scenes, wrapped in a custom element you can drop anywhere.
 <lab-scene name="driftfield" style="height: 60vh"></lab-scene>
 ```
 
-That is the whole API. The element creates nothing until it is near the
-viewport — no WebGL context, no scene module fetched. Once visible it sizes
+That is the whole API. Until the element is near the viewport it creates
+nothing: no WebGL context, no scene module fetched. Once visible it sizes
 itself and runs the render loop, **pauses while scrolled off screen**, and
 disposes its GPU resources when removed from the DOM.
 
@@ -29,8 +29,8 @@ disposes its GPU resources when removed from the DOM.
 npm install github:kiranyarlagadda/element-lab#v0.1.0
 ```
 
-`three` is a **peer dependency** — the package uses whatever copy your app
-already has, so you never end up shipping two.
+`three` is a **peer dependency**, so the package uses whatever copy your app
+already has and you never ship two.
 
 ```bash
 npm install three
@@ -67,7 +67,7 @@ el.addEventListener('scene-ready', (e) => {
 ```
 
 It also reflects progress on `data-state`: `loading`, `ready`, `error`, or
-`unsupported` when there is no WebGL context — style that last one to provide a
+`unsupported` when there is no WebGL context. Style that last one to provide a
 fallback.
 
 ## One renderer per element
@@ -76,7 +76,7 @@ Each `<lab-scene>` owns a WebGL context once it boots. Browsers allow roughly
 sixteen live contexts and silently evict the oldest beyond that.
 
 Because contexts are created on first sighting rather than on page load, a long
-page can hold plenty of these — the demo page has five. What you must avoid is
+page can hold plenty of these. The demo page has five. What you must avoid is
 **a dozen visible at once**. For a grid of many animated tiles, render one shared
 canvas behind the grid instead and position quads to match each tile's
 `getBoundingClientRect()`.
@@ -84,7 +84,7 @@ canvas behind the grid instead and position quads to match each tile's
 ## Adding a scene
 
 1. Create `src/scenes/yourscene.js`
-2. Export `meta` and `create` — the contract is documented at the top of
+2. Export `meta` and `create`. The contract is documented at the top of
    `src/lab-scene.js`
 3. Register it in the `SCENES` map in `src/lab-scene.js`
 
@@ -95,7 +95,7 @@ export function create({ renderer, width, height }) {
   return {
     render(time, dt, pointer) { renderer.render(scene, camera); },
     resize(w, h) {},
-    dispose() {},          // required — free geometries, materials, render targets
+    dispose() {},          // required: free geometries, materials, render targets
     background,            // optional THREE.Color for the clear colour
   };
 }
@@ -109,12 +109,12 @@ drawing anything.
 
 - **GLSL `smoothstep(a, b, x)` is undefined when `a >= b`.** It happens to work
   on most drivers, which is exactly why it is dangerous. Write
-  `1.0 - smoothstep(b, a, x)`. `npm run check` fails the build on this — it had
+  `1.0 - smoothstep(b, a, x)`. `npm run check` fails the build on this. It had
   already shipped in two scenes before the check existed.
 - **Y is flipped between DOM and WebGL.** DOM Y grows downward, world Y grows
   upward. Negating Y mirrors geometry, which reverses triangle winding and makes
-  everything back-facing — you get a draw call that reports triangles and paints
-  nothing. Use `side: DoubleSide` for screen-aligned quads.
+  everything back-facing, so you get a draw call that reports triangles and
+  paints nothing. Use `side: DoubleSide` for screen-aligned quads.
 - **A zero-sized canvas makes camera aspect `NaN`** and silently blanks
   everything. The element clamps to a 1px minimum.
 

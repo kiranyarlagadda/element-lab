@@ -1,7 +1,7 @@
 // Shared GLSL chunks. Injected as strings so every sketch compiles from one
 // noise implementation instead of each carrying its own copy.
 
-// 3D simplex noise — Ashima Arts / Stefan Gustavson, MIT licensed.
+// 3D simplex noise. Ashima Arts / Stefan Gustavson, MIT licensed.
 // https://github.com/ashima/webgl-noise
 export const simplex3 = /* glsl */ `
 vec3 mod289(vec3 x){ return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -68,7 +68,7 @@ float snoise(vec3 v){
 `;
 
 // Divergence-free vector field. Particles advected by this never bunch up or
-// thin out the way they do in a plain noise field — that is the whole reason
+// thin out the way they do in a plain noise field, which is the whole reason
 // curl noise looks like smoke instead of like static.
 export const curl = /* glsl */ `
 vec3 snoiseVec3(vec3 x){

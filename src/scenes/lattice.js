@@ -8,8 +8,8 @@ export const meta = {
   blurb:
     'Eighteen thousand billboarded dots drawn in a single instanced call. Height, scale and colour ' +
     'all come out of one fbm field evaluated in the vertex shader, with a travelling swell that ' +
-    'follows the pointer. This is the one that actually belongs behind a hero headline — it stays ' +
-    'legible under text and costs one draw call.',
+    'follows the pointer. This is the one that actually belongs behind a hero headline. It ' +
+    'stays legible under text and costs a single draw call.',
   stats: { instances: '18,000', 'draw calls': '1', 'CPU per frame': '3 uniforms' },
 };
 
@@ -161,7 +161,7 @@ export function create({ renderer, width, height }) {
       ndc.set(pointer.x, pointer.y);
       raycaster.setFromCamera(ndc, camera);
       if (raycaster.ray.intersectPlane(plane, hit)) {
-        // Trail rather than snap — the bump lags the cursor slightly.
+        // Trail rather than snap, so the bump lags slightly behind the cursor.
         smoothPointer.lerp(hit, 0.08);
       }
     }

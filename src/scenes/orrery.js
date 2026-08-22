@@ -24,8 +24,8 @@ export const meta = {
   blurb:
     'The actual solar system, not an impression of one. Every position comes from ' +
     'JPL’s Keplerian elements, solved through Kepler’s equation and rotated into the ' +
-    'J2000 ecliptic — so the planets start exactly where they are today, on orbits with ' +
-    'their true shapes, tilts and relative periods. Radial distance is square-rooted and ' +
+    'J2000 ecliptic, so the planets start exactly where they are today. The orbits carry ' +
+    'their real shapes, tilts and relative periods. Radial distance is square-rooted and ' +
     'the bodies are not to scale, or Mercury would sit inside the Sun’s glare.',
   stats: {
     epoch: EPOCH.toISOString().slice(0, 10),

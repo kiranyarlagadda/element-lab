@@ -97,7 +97,7 @@ const frag = /* glsl */ `
   void main(){
     vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
 
-    // Pointer nudges the camera instead of the object — reads as parallax.
+    // Pointer nudges the camera rather than the object, which reads as parallax.
     vec3 ro = vec3(uPointer.x * 0.55, uPointer.y * 0.45, 4.1);
     vec3 target = vec3(0.0);
     vec3 fwd = normalize(target - ro);
