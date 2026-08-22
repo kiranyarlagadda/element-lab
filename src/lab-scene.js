@@ -28,14 +28,26 @@
 //     title: 'Driftfield',            // shown in the gallery
 //     tags:  ['gpgpu', 'curl noise'], // shown as pills
 //     blurb: 'One paragraph...',      // shown under the title
-//     stats: { particles: '262,144' } // optional key/value readout
+//     stats: { particles: '262,144' },// optional key/value readout
+//     params: {                       // optional tweakable knobs
+//       speed: { label: 'Flow speed', type: 'range', min: 0.1, max: 1.5, step: 0.01, value: 0.48 },
+//       tint:  { label: 'Tint', type: 'color', value: '#7fb0ff' },
+//     },
 //   };
 //
-//   export function create({ renderer, width, height }) {
+// Anything declared in `params` becomes an HTML attribute on the element:
+//
+//   <lab-scene name="driftfield" speed="0.9" tint="#ff8844"></lab-scene>
+//
+// Attributes are read on load and watched afterwards, so changing one at
+// runtime updates the live scene without rebuilding it.
+//
+//   export function create({ renderer, width, height, params }) {
 //     // Build your scene here. You are handed a live THREE.WebGLRenderer.
 //     return {
 //       render(time, dt, pointer) { renderer.render(scene, camera); },
 //       resize(w, h) { ... },        // optional
+//       setParams(next) { ... },     // optional: apply changed params live
 //       dispose() { ... },           // REQUIRED: free geometries/materials/targets
 //       background: new Color(0x04050a), // optional canvas clear colour
 //     };
@@ -75,7 +87,36 @@ export async function loadMeta(name) {
   return mod?.meta ?? null;
 }
 
+/**
+ * Turn an attribute string into the type the scene expects. Attributes are
+ * always strings; a scene wants numbers and booleans.
+ */
+function coerce(spec, raw) {
+  if (raw === null || raw === undefined || raw === '') return spec.value;
+  if (spec.type === 'range') {
+    const n = Number.parseFloat(raw);
+    if (!Number.isFinite(n)) return spec.value;
+    const lo = spec.min ?? -Infinity;
+    const hi = spec.max ?? Infinity;
+    return Math.min(hi, Math.max(lo, n));
+  }
+  if (spec.type === 'toggle') return raw !== 'false' && raw !== '0';
+  return raw; // colour, or anything else the scene wants as a string
+}
+
+/** Merge declared defaults with whatever attributes are actually set. */
+export function readParams(schema, element) {
+  const out = {};
+  for (const [key, spec] of Object.entries(schema ?? {})) {
+    out[key] = coerce(spec, element.getAttribute(key));
+  }
+  return out;
+}
+
 export class LabScene extends HTMLElement {
+  // `name` is the only fixed attribute. Param attributes vary per scene and are
+  // not known until a scene module loads, so they are watched with a
+  // MutationObserver instead of this static list.
   static observedAttributes = ['name'];
 
   #canvas = null;
@@ -90,6 +131,7 @@ export class LabScene extends HTMLElement {
   #observers = [];
   #reduceMotion = false;
   #booted = false;
+  #schema = null;
 
   connectedCallback() {
     if (this.#canvas) return; // already set up; a move in the DOM re-fires this
@@ -143,6 +185,17 @@ export class LabScene extends HTMLElement {
     const onVisibility = () => (document.hidden ? this.#stop() : this.#visible && this.#start());
     document.addEventListener('visibilitychange', onVisibility);
     this.#observers.push(() => document.removeEventListener('visibilitychange', onVisibility));
+
+    // Param attributes are scene-specific, so watch every attribute and filter
+    // against the loaded scene's schema.
+    const mo = new MutationObserver((records) => {
+      if (!this.#schema || !this.#scene?.setParams) return;
+      if (records.some((r) => r.attributeName !== 'name' && r.attributeName in this.#schema)) {
+        this.#scene.setParams(readParams(this.#schema, this));
+      }
+    });
+    mo.observe(this, { attributes: true });
+    this.#observers.push(() => mo.disconnect());
   }
 
   /** Create the WebGL context and load the scene. Runs once, on first sighting. */
@@ -180,6 +233,12 @@ export class LabScene extends HTMLElement {
   get sceneName() { return this.getAttribute('name'); }
   set sceneName(value) { this.setAttribute('name', value); }
 
+  /** The active scene's param schema, or null while nothing is loaded. */
+  get paramSchema() { return this.#schema; }
+
+  /** Current param values, defaults merged with any attributes that are set. */
+  get params() { return readParams(this.#schema, this); }
+
   async #load(name) {
     if (!name || !SCENES[name]) {
       this.dataset.state = 'error';
@@ -196,7 +255,13 @@ export class LabScene extends HTMLElement {
 
     const { width, height } = this.#size();
     this.#renderer.setSize(width, height, false);
-    this.#scene = module.create({ renderer: this.#renderer, width, height });
+    this.#schema = module.meta?.params ?? null;
+    this.#scene = module.create({
+      renderer: this.#renderer,
+      width,
+      height,
+      params: readParams(this.#schema, this),
+    });
 
     this.#renderer.setClearColor(this.#scene.background ?? new Color(0x04050a), 1);
     this.#scene.resize?.(width, height);

@@ -11,6 +11,12 @@ export const meta = {
     'field and writes the result to a second texture, which becomes next frame’s input. ' +
     'The CPU never touches a particle.',
   stats: { particles: '262,144', 'sim passes/frame': '1', 'CPU work': 'none' },
+  params: {
+    speed: { label: 'Flow speed', type: 'range', min: 0.05, max: 1.4, step: 0.01, value: 0.48 },
+    scale: { label: 'Noise scale', type: 'range', min: 0.4, max: 4.0, step: 0.01, value: 1.75 },
+    size: { label: 'Particle size', type: 'range', min: 1.5, max: 18, step: 0.1, value: 5.5 },
+    decay: { label: 'Lifetime', type: 'range', min: 0.03, max: 0.6, step: 0.01, value: 0.14 },
+  },
 };
 
 const SIZE = 512;                 // 512 x 512 texels -> 262,144 particles
@@ -142,7 +148,7 @@ const pointsFrag = /* glsl */ `
   }
 `;
 
-export function create({ renderer, width, height }) {
+export function create({ renderer, width, height, params = {} }) {
   const gl = renderer.getContext();
   const canFloat = !!gl.getExtension('EXT_color_buffer_float');
   const dataType = canFloat ? THREE.FloatType : THREE.HalfFloatType;
@@ -194,9 +200,9 @@ export function create({ renderer, width, height }) {
       uPos: { value: seedTex },
       uTime: { value: 0 },
       uDt: { value: 0.016 },
-      uScale: { value: 1.75 },
-      uSpeed: { value: 0.48 },
-      uDecay: { value: 0.14 },
+      uScale: { value: params.scale ?? 1.75 },
+      uSpeed: { value: params.speed ?? 0.48 },
+      uDecay: { value: params.decay ?? 0.14 },
       uPointer: { value: new THREE.Vector3(999, 999, 999) },
       uPointerForce: { value: 0.0 },
     },
@@ -249,7 +255,7 @@ export function create({ renderer, width, height }) {
     uniforms: {
       uPos: { value: targets[0].texture },
       uPrevPos: { value: targets[1].texture },
-      uSize: { value: 5.5 },
+      uSize: { value: params.size ?? 5.5 },
       uPixelRatio: { value: renderer.getPixelRatio() },
       uExposure: { value: 0.55 },
     },
@@ -314,5 +320,12 @@ export function create({ renderer, width, height }) {
     pointsMaterial.dispose();
   }
 
-  return { render, resize, dispose, background };
+  function setParams(next) {
+    if (next.scale !== undefined) simMaterial.uniforms.uScale.value = next.scale;
+    if (next.speed !== undefined) simMaterial.uniforms.uSpeed.value = next.speed;
+    if (next.decay !== undefined) simMaterial.uniforms.uDecay.value = next.decay;
+    if (next.size !== undefined) pointsMaterial.uniforms.uSize.value = next.size;
+  }
+
+  return { render, resize, dispose, setParams, background };
 }

@@ -11,6 +11,11 @@ export const meta = {
     'at two tangent-space neighbours and rebuilds the normal per vertex. Skip that and the whole ' +
     'thing shades like a smooth ball wearing a lumpy costume.',
   stats: { vertices: '194,940', 'noise taps/vertex': '21', normals: 'recomputed' },
+  params: {
+    amp: { label: 'Displacement', type: 'range', min: 0.02, max: 0.6, step: 0.01, value: 0.28 },
+    freq: { label: 'Noise frequency', type: 'range', min: 0.4, max: 4.0, step: 0.05, value: 1.5 },
+    speed: { label: 'Rotation', type: 'range', min: 0, max: 0.6, step: 0.01, value: 0.15 },
+  },
 };
 
 const vert = /* glsl */ `
@@ -132,7 +137,7 @@ const frag = /* glsl */ `
   }
 `;
 
-export function create({ renderer, width, height }) {
+export function create({ renderer, width, height, params = {} }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
   camera.position.set(0, 0, 3.4);
@@ -147,8 +152,8 @@ export function create({ renderer, width, height }) {
     fragmentShader: frag,
     uniforms: {
       uTime: { value: 0 },
-      uAmp: { value: 0.28 },
-      uFreq: { value: 1.5 },
+      uAmp: { value: params.amp ?? 0.28 },
+      uFreq: { value: params.freq ?? 1.5 },
       uRadius: { value: 1.0 },
       uCameraPos: { value: new THREE.Vector3() },
     },
@@ -158,6 +163,7 @@ export function create({ renderer, width, height }) {
   scene.add(mesh);
 
   const tilt = new THREE.Vector2(0, 0);
+  let spin = params.speed ?? 0.15;
   const background = new THREE.Color(0x06070d);
 
   function render(time, dt, pointer) {
@@ -168,7 +174,7 @@ export function create({ renderer, width, height }) {
     tilt.x += (tx - tilt.x) * 0.05;
     tilt.y += (ty - tilt.y) * 0.05;
 
-    mesh.rotation.y = time * 0.15 + tilt.x * 0.6;
+    mesh.rotation.y = time * spin + tilt.x * 0.6;
     mesh.rotation.x = tilt.y * -0.5;
 
     camera.position.z = 3.4;
@@ -188,5 +194,11 @@ export function create({ renderer, width, height }) {
     material.dispose();
   }
 
-  return { render, resize, dispose, background };
+  function setParams(next) {
+    if (next.amp !== undefined) material.uniforms.uAmp.value = next.amp;
+    if (next.freq !== undefined) material.uniforms.uFreq.value = next.freq;
+    if (next.speed !== undefined) spin = next.speed;
+  }
+
+  return { render, resize, dispose, setParams, background };
 }

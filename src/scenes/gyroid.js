@@ -10,6 +10,11 @@ export const meta = {
     'ray through a distance field for every pixel, solving a gyroid minimal surface analytically. ' +
     'Normals, soft shadows and ambient occlusion are all derived from the same distance function.',
   stats: { triangles: '2', 'max ray steps': '96', geometry: 'implicit' },
+  params: {
+    thickness: { label: 'Wall thickness', type: 'range', min: 0.08, max: 0.6, step: 0.01, value: 0.28 },
+    scale: { label: 'Lattice scale', type: 'range', min: 1.5, max: 6.0, step: 0.05, value: 3.0 },
+    speed: { label: 'Rotation', type: 'range', min: 0, max: 0.5, step: 0.01, value: 0.12 },
+  },
 };
 
 const vert = /* glsl */ `
@@ -26,6 +31,9 @@ const frag = /* glsl */ `
   uniform vec2  uResolution;
   uniform float uTime;
   uniform vec2  uPointer;
+  uniform float uThickness;
+  uniform float uScale;
+  uniform float uSpeed;
 
   varying vec2 vUv;
 
@@ -43,15 +51,15 @@ const frag = /* glsl */ `
   }
 
   float map(vec3 p){
-    p.xz *= rot(uTime * 0.12);
-    p.xy *= rot(uTime * 0.08);
+    p.xz *= rot(uTime * uSpeed);
+    p.xy *= rot(uTime * uSpeed * 0.66);
 
     // Carve the infinite lattice down to a rounded blob.
     float shell = length(p) - 1.25;
 
     // Two octaves at different frequencies read as fine detail on coarse structure.
-    float coarse = gyroid(p, 3.0, 0.28);
-    float fine   = gyroid(p, 9.7, 0.20);
+    float coarse = gyroid(p, uScale, uThickness);
+    float fine   = gyroid(p, uScale * 3.23, uThickness * 0.71);
 
     float surface = coarse - fine * 0.12;
 
@@ -164,7 +172,7 @@ const frag = /* glsl */ `
   }
 `;
 
-export function create({ renderer, width, height }) {
+export function create({ renderer, width, height, params = {} }) {
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const geometry = new THREE.PlaneGeometry(2, 2);
@@ -178,6 +186,9 @@ export function create({ renderer, width, height }) {
       uResolution: { value: new THREE.Vector2(width, height) },
       uTime: { value: 0 },
       uPointer: { value: new THREE.Vector2(0, 0) },
+      uThickness: { value: params.thickness ?? 0.28 },
+      uScale: { value: params.scale ?? 3.0 },
+      uSpeed: { value: params.speed ?? 0.12 },
     },
   });
 
@@ -207,5 +218,11 @@ export function create({ renderer, width, height }) {
     material.dispose();
   }
 
-  return { render, resize, dispose, background };
+  function setParams(next) {
+    if (next.thickness !== undefined) material.uniforms.uThickness.value = next.thickness;
+    if (next.scale !== undefined) material.uniforms.uScale.value = next.scale;
+    if (next.speed !== undefined) material.uniforms.uSpeed.value = next.speed;
+  }
+
+  return { render, resize, dispose, setParams, background };
 }

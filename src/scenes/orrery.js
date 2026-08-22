@@ -32,6 +32,11 @@ export const meta = {
     source: 'JPL SSD',
     'draw calls': '3',
   },
+  params: {
+    speed: { label: 'Days per second', type: 'range', min: 0, max: 400, step: 1, value: 45 },
+    size: { label: 'Body size', type: 'range', min: 40, max: 320, step: 1, value: 130 },
+    zoom: { label: 'Camera distance', type: 'range', min: 9, max: 30, step: 0.1, value: 16 },
+  },
 };
 
 const planetVert = /* glsl */ `
@@ -39,12 +44,13 @@ const planetVert = /* glsl */ `
   attribute float aSize;
   attribute vec3 aColour;
   uniform float uPixelRatio;
+  uniform float uBodyScale;
   varying vec3 vColour;
   void main(){
     vColour = aColour;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize * uPixelRatio * 130.0 / max(-mv.z, 0.001);
+    gl_PointSize = aSize * uPixelRatio * uBodyScale / max(-mv.z, 0.001);
   }
 `;
 
@@ -79,7 +85,7 @@ const sunFrag = /* glsl */ `
   }
 `;
 
-export function create({ renderer, width, height }) {
+export function create({ renderer, width, height, params = {} }) {
   const scene = new Scene();
   const camera = new PerspectiveCamera(45, width / height, 0.1, 400);
 
@@ -142,7 +148,10 @@ export function create({ renderer, width, height }) {
     transparent: true,
     depthWrite: false,
     blending: AdditiveBlending,
-    uniforms: { uPixelRatio: { value: renderer.getPixelRatio() } },
+    uniforms: {
+      uPixelRatio: { value: renderer.getPixelRatio() },
+      uBodyScale: { value: params.size ?? 130 },
+    },
   });
   scene.add(new Points(planetGeometry, planetMaterial));
 
@@ -160,17 +169,20 @@ export function create({ renderer, width, height }) {
     blending: AdditiveBlending,
     uniforms: {
       uPixelRatio: { value: renderer.getPixelRatio() },
+      uBodyScale: { value: params.size ?? 130 },
       uTime: { value: 0 },
     },
   });
   scene.add(new Points(sunGeometry, sunMaterial));
 
   const tilt = new Vector2(0, 0);
+  let daysPerSecond = params.speed ?? DAYS_PER_SECOND;
+  let orbitRadius = params.zoom ?? 16.0;
   const background = new Color(0x03040a);
 
   function render(time, dt, pointer) {
     // Advance simulated time from today's real epoch.
-    const T = T0 + (time * DAYS_PER_SECOND) / 36525;
+    const T = T0 + (time * daysPerSecond) / 36525;
 
     PLANETS.forEach((planet, i) => {
       const p = heliocentric(planet, T);
@@ -190,7 +202,7 @@ export function create({ renderer, width, height }) {
     // Slow drift around the ecliptic; the pointer raises and lowers the view.
     const angle = time * 0.045 + tilt.x * 0.7;
     const elevation = 6.8 + tilt.y * 4.5;
-    const radius = 16.0;
+    const radius = orbitRadius;
     camera.position.set(Math.sin(angle) * radius, Math.cos(angle) * radius, elevation);
     camera.up.set(0, 0, 1);              // z is ecliptic north here
     camera.lookAt(0, 0, 0);
@@ -218,5 +230,14 @@ export function create({ renderer, width, height }) {
     sunMaterial.dispose();
   }
 
-  return { render, resize, dispose, background };
+  function setParams(next) {
+    if (next.speed !== undefined) daysPerSecond = next.speed;
+    if (next.zoom !== undefined) orbitRadius = next.zoom;
+    if (next.size !== undefined) {
+      planetMaterial.uniforms.uBodyScale.value = next.size;
+      sunMaterial.uniforms.uBodyScale.value = next.size;
+    }
+  }
+
+  return { render, resize, dispose, setParams, background };
 }

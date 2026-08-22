@@ -11,6 +11,11 @@ export const meta = {
     'follows the pointer. This is the one that actually belongs behind a hero headline. It ' +
     'stays legible under text and costs a single draw call.',
   stats: { instances: '18,000', 'draw calls': '1', 'CPU per frame': '3 uniforms' },
+  params: {
+    amp: { label: 'Swell height', type: 'range', min: 0.1, max: 4.0, step: 0.05, value: 1.5 },
+    size: { label: 'Dot size', type: 'range', min: 0.04, max: 0.32, step: 0.005, value: 0.135 },
+    speed: { label: 'Drift speed', type: 'range', min: 0, max: 0.6, step: 0.01, value: 0.16 },
+  },
 };
 
 const COLS = 180;
@@ -25,6 +30,7 @@ const vert = /* glsl */ `
   uniform float uPointerAmount;
   uniform float uAmp;
   uniform float uDotSize;
+  uniform float uDrift;
 
   attribute vec2  aOffset;
   attribute float aRand;
@@ -40,7 +46,7 @@ const vert = /* glsl */ `
     vec3 base = vec3(aOffset.x, aOffset.y, 0.0);
 
     // Slow drifting swell.
-    float field = fbm(vec3(aOffset * 0.42, uTime * 0.16), 4, 2.0, 0.5);
+    float field = fbm(vec3(aOffset * 0.42, uTime * uDrift), 4, 2.0, 0.5);
 
     // Pointer raises a soft gaussian bump that trails the cursor.
     float d = distance(aOffset, uPointer.xy);
@@ -99,7 +105,7 @@ const frag = /* glsl */ `
   }
 `;
 
-export function create({ renderer, width, height }) {
+export function create({ renderer, width, height, params = {} }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200);
   camera.position.set(0, -14, 13);
@@ -138,8 +144,9 @@ export function create({ renderer, width, height }) {
       uTime: { value: 0 },
       uPointer: { value: new THREE.Vector3(0, 0, 0) },
       uPointerAmount: { value: 0 },
-      uAmp: { value: 1.5 },
-      uDotSize: { value: 0.135 },
+      uAmp: { value: params.amp ?? 1.5 },
+      uDotSize: { value: params.size ?? 0.135 },
+      uDrift: { value: params.speed ?? 0.16 },
     },
   });
 
@@ -188,5 +195,11 @@ export function create({ renderer, width, height }) {
     material.dispose();
   }
 
-  return { render, resize, dispose, background };
+  function setParams(next) {
+    if (next.amp !== undefined) material.uniforms.uAmp.value = next.amp;
+    if (next.size !== undefined) material.uniforms.uDotSize.value = next.size;
+    if (next.speed !== undefined) material.uniforms.uDrift.value = next.speed;
+  }
+
+  return { render, resize, dispose, setParams, background };
 }
