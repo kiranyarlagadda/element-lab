@@ -77,6 +77,7 @@ const SCENES = {
   chroma: () => import('./scenes/chroma.js'),
   lattice: () => import('./scenes/lattice.js'),
   orrery: () => import('./scenes/orrery.js'),
+  cabinet: () => import('./scenes/cabinet.js'),
 };
 
 export const SCENE_NAMES = Object.keys(SCENES);

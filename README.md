@@ -22,6 +22,7 @@ disposes its GPU resources when removed from the DOM.
 | `chroma` | An icosphere displaced by fractal noise, with normals rebuilt per vertex from the displaced neighbourhood rather than left stale. |
 | `lattice` | 18,000 billboarded dots in a single instanced call. Designed to sit behind a headline and stay legible. |
 | `orrery` | The real solar system. Positions come from NASA/JPL Keplerian elements solved through Kepler's equation, so the planets are where they actually are today. |
+| `cabinet` | A dark room with a glowing arcade cabinet. The camera flies in until the screen fills the viewport, easing to a dead stop so a page can fade its own UI in over it. |
 
 ## Configuring a scene
 
@@ -45,6 +46,7 @@ el.setAttribute('speed', '1.2');   // takes effect on the next frame
 | `chroma` | `amp` `freq` `speed` |
 | `lattice` | `amp` `size` `speed` |
 | `orrery` | `speed` `size` `zoom` |
+| `cabinet` | `zoom` `sway` `glow` `scan` `dust` |
 
 Read the schema at runtime to build your own controls:
 
