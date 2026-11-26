@@ -1,7 +1,7 @@
 {
   "name": "element-lab",
   "version": "0.4.0",
-  "description": "Hand-written WebGL scenes as a drop-in custom element: <lab-scene name=\"driftfield\">",
+  "description": "WebGL scenes as a drop-in custom element: <lab-scene name=\"driftfield\">",
   "type": "module",
   "license": "MIT",
   "author": "Kiran Yarlagadda",

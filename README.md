@@ -1,6 +1,6 @@
 # element-lab
 
-Hand-written WebGL scenes, wrapped in a custom element you can drop anywhere.
+WebGL scenes, wrapped in a custom element you can drop anywhere.
 
 ```html
 <script type="module">import 'element-lab';</script>
